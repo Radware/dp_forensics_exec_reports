@@ -31,7 +31,13 @@ colorama>=0.4.6
 psutil>=5.9.0
 memory-profiler>=0.61.0
 
+# Flask API dependencies
+Flask>=3.0.0
+Werkzeug>=3.0.0
+flask-cors>=4.0.0
+
 # Development and testing (optional)
 pytest>=7.4.0
 black>=23.0.0
 flake8>=6.0.0
+pylint>=3.0.0
