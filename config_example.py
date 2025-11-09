@@ -447,16 +447,6 @@ BANDWIDTH_UNIT_CONFIGS = {
 CHUNK_SIZE = 50000              # Number of rows to process at once
 MAX_MEMORY_USAGE_GB = 2         # Maximum memory usage in GB before warning
 
-# Data filtering options - exclude rows where column equals specified values
-# Multiple filters use AND logic (row must match ALL conditions to be excluded)
-EXCLUDE_FILTERS = {
-    # 'Threat Category': ['Anomalies'],     # Example: exclude Packet Anomalies and OOS detection
-    # 'Policy Name': ['Packet Anomalies'],  # Example: exclude specific policy
-    # 'Attack Name': ['DNS RFC-compliance violation'],  # Example: exclude specific attacks
-    # 'Risk': ['Low'],                      # Example: exclude low-risk events
-    # 'Direction': ['Internal'],            # Example: exclude internal traffic
-}
-
 # CSV column configuration
 EXPECTED_COLUMNS = [
     'S.No', 'Start Time', 'End Time', 'Device IP Address', 'Threat Category',

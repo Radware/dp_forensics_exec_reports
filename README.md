@@ -355,6 +355,7 @@ This tool is designed for internal use with DefensePro forensics data. Please en
 
 | Version | Change/Fixes/Features                                                                      |
 |---------|--------------------------------------------------------------------------------------------|
+| v2.0.4  | - 11/7/25 - Fixed EXCLUDE_FILTER - was referenced twice in config.py example
 | v2.0.3  | - 11/3/25 - Fixed 2 charts - Top 5 Attacks by Max Bandwidth and PPS. Added config_example.py and removed config.py from git tracking. Enhanced identification of the last full month.  |
 | v2.0.2  | - 10/24/25 - Fixed CHART_PREFERENCES variables |
 | v2.0.1  | - 10/24/25 - Major UX Enhancement: Added user-configurable control for chart types, layouts, and colors. Improved config.py architecture for intuitive customization. Introduced color palettes with individual chart override support if needed. Updated documentation with customization examples. |
