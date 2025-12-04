@@ -65,9 +65,10 @@ class ForensicsDataProcessor:
             schema_overrides = self._get_schema_overrides()
             
             # Read a larger sample to analyze structure and get enough samples for date format detection
+            # Use n_rows to ensure stratified sampling has diverse date coverage for date format detection
             df_sample = pl.read_csv(
                 self.file_path,
-                n_rows=1000,
+                n_rows=3000,
                 ignore_errors=True,
                 schema_overrides=schema_overrides,
                 infer_schema_length=10000
@@ -106,7 +107,7 @@ class ForensicsDataProcessor:
                 'is_large_file': file_size > 100 * 1024 * 1024  # > 100MB
             }
             
-            logger.info(f"File analysis complete: {analysis['estimated_rows']:,} estimated rows")
+            # logger.info(f"File analysis complete: {analysis['estimated_rows']:,} estimated rows")
             return analysis
             
         except Exception as e:
@@ -638,14 +639,24 @@ class ForensicsDataProcessor:
         try:
             stats['total_events'] += len(chunk)
             
-            # Source and destination IPs
+            # Source and destination IPs (exclude "Multiple" and "0.0.0.0")
             if 'Source IP Address' in chunk.columns:
                 source_ips = chunk['Source IP Address'].to_list()
-                stats['unique_source_ips'].update([ip for ip in source_ips if ip and str(ip) != 'nan'])
+                stats['unique_source_ips'].update([
+                    str(ip).strip() for ip in source_ips 
+                    if ip and str(ip) != 'nan' 
+                    and str(ip).strip().lower() != 'multiple' 
+                    and str(ip).strip() != '0.0.0.0'
+                ])
             
             if 'Destination IP Address' in chunk.columns:
                 dest_ips = chunk['Destination IP Address'].to_list()
-                stats['unique_dest_ips'].update([ip for ip in dest_ips if ip and str(ip) != 'nan'])
+                stats['unique_dest_ips'].update([
+                    str(ip).strip() for ip in dest_ips 
+                    if ip and str(ip) != 'nan' 
+                    and str(ip).strip().lower() != 'multiple' 
+                    and str(ip).strip() != '0.0.0.0'
+                ])
             
             # Attack types with threat categories
             if 'Attack Name' in chunk.columns and 'Threat Category' in chunk.columns:
@@ -964,15 +975,23 @@ class ForensicsDataProcessor:
                             }
             
             # Count source/dest IPs for top lists
+            # Exclude "Multiple" and "0.0.0.0" from source IPs
             if 'Source IP Address' in chunk.columns:
                 for ip in chunk['Source IP Address'].to_list():
                     if ip and str(ip) != 'nan':
-                        stats['top_source_ips'][ip] = stats['top_source_ips'].get(ip, 0) + 1
+                        ip_str = str(ip).strip()
+                        # Exclude "Multiple" and "0.0.0.0"
+                        if ip_str.lower() != 'multiple' and ip_str != '0.0.0.0':
+                            stats['top_source_ips'][ip_str] = stats['top_source_ips'].get(ip_str, 0) + 1
             
+            # Exclude "Multiple" and "0.0.0.0" from destination IPs
             if 'Destination IP Address' in chunk.columns:
                 for ip in chunk['Destination IP Address'].to_list():
                     if ip and str(ip) != 'nan':
-                        stats['top_dest_ips'][ip] = stats['top_dest_ips'].get(ip, 0) + 1
+                        ip_str = str(ip).strip()
+                        # Exclude "Multiple" and "0.0.0.0"
+                        if ip_str.lower() != 'multiple' and ip_str != '0.0.0.0':
+                            stats['top_dest_ips'][ip_str] = stats['top_dest_ips'].get(ip_str, 0) + 1
             
             # Track top individual attacks by BPS and PPS
             if 'Attack Name' in chunk.columns:

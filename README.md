@@ -355,6 +355,7 @@ This tool is designed for internal use with DefensePro forensics data. Please en
 
 | Version | Change/Fixes/Features                                                                      |
 |---------|--------------------------------------------------------------------------------------------|
+| v2.0.5  | - 11/27/25 - Fixed date identification with / separator (e.g. 11/27/2025). Improved full month identification if logged events does not start on the 1st of the month. Cosmetical change- modified headline- removed "Top 5" from "Security Events by Policy". Removed 0.0.0.0 and Multiple from Top 10 Sources and Top 10 attacked destinations |
 | v2.0.4  | - 11/7/25 - Fixed EXCLUDE_FILTER - was referenced twice in config.py example
 | v2.0.3  | - 11/3/25 - Fixed 2 charts - Top 5 Attacks by Max Bandwidth and PPS. Added config_example.py and removed config.py from git tracking. Enhanced identification of the last full month.  |
 | v2.0.2  | - 10/24/25 - Fixed CHART_PREFERENCES variables |

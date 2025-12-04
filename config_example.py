@@ -464,8 +464,10 @@ REQUIRED_COLUMNS = [
 
 # Date parsing configuration
 DATE_FORMATS = [
-    '%d.%m.%Y %H:%M:%S',  # DD.MM.YYYY HH:MM:SS (preferred for European format)
-    '%m.%d.%Y %H:%M:%S',  # MM.DD.YYYY HH:MM:SS (example format)
+    '%d.%m.%Y %H:%M:%S',  # DD.MM.YYYY HH:MM:SS (dot-delimited European)
+    '%m.%d.%Y %H:%M:%S',  # MM.DD.YYYY HH:MM:SS (dot-delimited US)
+    '%m/%d/%Y %H:%M:%S',  # MM/DD/YYYY HH:MM:S S (slash-delimited US)
+    '%d/%m/%Y %H:%M:%S',  # DD/MM/YYYY HH:MM:SS (slash-delimited European)
 ]
 
 # Force specific date format (overrides auto-detection)

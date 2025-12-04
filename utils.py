@@ -175,18 +175,40 @@ def detect_date_format(sample_dates: List[str]) -> Optional[str]:
     total_samples = len(all_valid_samples)
     logger.info(f"Starting intelligent date format detection with {total_samples} total samples")
 
-    # Smart sampling strategy based on dataset size
+    # Smart sampling strategy based on dataset size - use STRATIFIED sampling
     if total_samples <= 500:
         # Small dataset: use all samples
         working_samples = all_valid_samples
         logger.debug(f"Small dataset: using all {len(working_samples)} samples")
     else:
-        # Large dataset: progressive random sampling
+        # Large dataset: stratified sampling from beginning, middle, and end
+        # This helps find unambiguous dates (day > 12) faster
         import random
-        # Start with diverse random sample, expand if needed
+        
+        # Calculate sample size for each stratum
         initial_size = min(300, total_samples // 3)
-        working_samples = random.sample(all_valid_samples, initial_size)
-        logger.debug(f"Large dataset: starting with {len(working_samples)} random samples")
+        samples_per_stratum = initial_size // 3  # Divide among 3 strata
+        
+        # Sample from 3 regions: beginning (0-33%), middle (33-66%), end (66-100%)
+        third = total_samples // 3
+        
+        stratum1_start = 0
+        stratum1_end = third
+        stratum2_start = third
+        stratum2_end = 2 * third
+        stratum3_start = 2 * third
+        stratum3_end = total_samples
+        
+        # Random sampling from each stratum
+        working_samples = []
+        working_samples.extend(random.sample(all_valid_samples[stratum1_start:stratum1_end], 
+                                            min(samples_per_stratum, stratum1_end - stratum1_start)))
+        working_samples.extend(random.sample(all_valid_samples[stratum2_start:stratum2_end], 
+                                            min(samples_per_stratum, stratum2_end - stratum2_start)))
+        working_samples.extend(random.sample(all_valid_samples[stratum3_start:stratum3_end], 
+                                            min(samples_per_stratum, stratum3_end - stratum3_start)))
+        
+        logger.debug(f"Large dataset: stratified sampling with {len(working_samples)} samples from beginning/middle/end")
 
     # Progressive detection with up to 3 iterations
     max_samples = min(1000, total_samples)  # Cap for performance
@@ -209,9 +231,28 @@ def detect_date_format(sample_dates: List[str]) -> Optional[str]:
 
             if remaining_samples and additional_size > 0:
                 import random
-                new_samples = random.sample(remaining_samples, min(additional_size, len(remaining_samples)))
+                # Stratified expansion: take samples from different parts of remaining data
+                remaining_count = len(remaining_samples)
+                samples_per_part = additional_size // 3
+                
+                # Divide remaining samples into 3 parts
+                part_size = remaining_count // 3
+                part1 = remaining_samples[:part_size]
+                part2 = remaining_samples[part_size:2*part_size]
+                part3 = remaining_samples[2*part_size:]
+                
+                new_samples = []
+                if part1:
+                    new_samples.extend(random.sample(part1, min(samples_per_part, len(part1))))
+                if part2:
+                    new_samples.extend(random.sample(part2, min(samples_per_part, len(part2))))
+                if part3:
+                    # Give any remaining sample budget to the last part
+                    remaining_budget = additional_size - len(new_samples)
+                    new_samples.extend(random.sample(part3, min(remaining_budget, len(part3))))
+                
                 working_samples.extend(new_samples)
-                logger.debug(f"Expanded sample to {len(working_samples)} for better evidence")
+                logger.debug(f"Expanded sample to {len(working_samples)} using stratified sampling")
                 continue  # Try again with larger sample
 
         # No more expansion possible or small dataset - proceed to parsing test
@@ -233,15 +274,29 @@ def _find_unambiguous_evidence(samples):
     for date_str in samples:
         try:
             date_part = date_str.split()[0]
+            
+            # Try both dot and slash delimiters
+            delimiter = None
             if '.' in date_part:
-                parts = [int(x) for x in date_part.split('.')]
+                delimiter = '.'
+            elif '/' in date_part:
+                delimiter = '/'
+            
+            if delimiter:
+                parts = [int(x) for x in date_part.split(delimiter)]
                 if len(parts) >= 2:
                     first, second = parts[0], parts[1]
                     # Only count unambiguous cases where one part is definitely > 12
-                    if first > 12 and second <= 12:  # Must be DD.MM format
-                        unambiguous_evidence['%d.%m.%Y %H:%M:%S'] = unambiguous_evidence.get('%d.%m.%Y %H:%M:%S', 0) + 1
-                    elif second > 12 and first <= 12:  # Must be MM.DD format
-                        unambiguous_evidence['%m.%d.%Y %H:%M:%S'] = unambiguous_evidence.get('%m.%d.%Y %H:%M:%S', 0) + 1
+                    if first > 12 and second <= 12:  # Must be DD/MM or DD.MM format
+                        if delimiter == '.':
+                            unambiguous_evidence['%d.%m.%Y %H:%M:%S'] = unambiguous_evidence.get('%d.%m.%Y %H:%M:%S', 0) + 1
+                        else:  # delimiter == '/'
+                            unambiguous_evidence['%d/%m/%Y %H:%M:%S'] = unambiguous_evidence.get('%d/%m/%Y %H:%M:%S', 0) + 1
+                    elif second > 12 and first <= 12:  # Must be MM/DD or MM.DD format
+                        if delimiter == '.':
+                            unambiguous_evidence['%m.%d.%Y %H:%M:%S'] = unambiguous_evidence.get('%m.%d.%Y %H:%M:%S', 0) + 1
+                        else:  # delimiter == '/'
+                            unambiguous_evidence['%m/%d/%Y %H:%M:%S'] = unambiguous_evidence.get('%m/%d/%Y %H:%M:%S', 0) + 1
         except (ValueError, IndexError):
             continue
             
@@ -349,10 +404,16 @@ def get_complete_months(start_date: datetime, end_date: datetime,
     complete_months = []
     
     # Find first complete month
+    # if data starts early in a month (day <= 7)- covers the case if the first event is not on the 1st
+    # include it as a candidate and let Phase 2 validation decide if it's usable
     if start_date.day == 1:
         current_month = start_date
+    elif start_date.day <= 7:
+        # Data starts not on the 1st but early in the month within 7 days - include this month as a candidate
+        current_month = datetime(start_date.year, start_date.month, 1)
+        logger.debug(f"Phase 1: Data starts on day {start_date.day} - including {current_month.strftime('%Y-%m (%B)')} as candidate")
     else:
-        # Move to next month if we don't start on the 1st
+        # Data starts too late in month - skip to next month
         if start_date.month == 12:
             current_month = datetime(start_date.year + 1, 1, 1)
         else:
@@ -366,9 +427,17 @@ def get_complete_months(start_date: datetime, end_date: datetime,
             month_end = datetime(current_month.year, current_month.month + 1, 1) - timedelta(seconds=1)
         
         # Check if this is a complete month within our data range
-        # Month is complete if it starts after/at data start AND the month's last day is within the data range
-        # We check if month_end.date() <= end_date.date() to handle cases where end_date might be 23:58:32 on the last day
-        month_fully_in_range = (current_month >= start_date and month_end.date() <= end_date.date())
+        # For the first month, we're lenient - if it's already set as current_month (from the logic above),
+        # we include it as long as its end date is within range
+        # For subsequent months, they must start at or after data start AND end within data range
+        is_first_candidate = (len(complete_months) == 0 and current_month.month == start_date.month and current_month.year == start_date.year)
+        
+        if is_first_candidate:
+            # First month - lenient check (already validated above that data starts early enough)
+            month_fully_in_range = (month_end.date() <= end_date.date())
+        else:
+            # Subsequent months - strict check
+            month_fully_in_range = (current_month >= start_date and month_end.date() <= end_date.date())
         
         if month_fully_in_range:
             complete_months.append((current_month, month_end))
@@ -395,7 +464,7 @@ def get_complete_months(start_date: datetime, end_date: datetime,
         return complete_months
 
 
-def _calculate_distribution_score(month_data, month_start, month_name):
+def _calculate_distribution_score(month_data, month_start, month_name, is_first_month_in_dataset=False):
     """
     Calculate a distribution score (0.0 to 1.0) based on how the data is spread across the month.
     
@@ -408,6 +477,8 @@ def _calculate_distribution_score(month_data, month_start, month_name):
         month_data: Polars DataFrame with 'start_parsed' column
         month_start: datetime object for first day of month
         month_name: String name of month for logging
+        is_first_month_in_dataset: Boolean indicating if this is the first month in the dataset
+                                   (more lenient scoring for early coverage)
         
     Returns:
         Float score from 0.0 (suspicious) to 1.0 (good distribution)
@@ -448,18 +519,32 @@ def _calculate_distribution_score(month_data, month_start, month_name):
     
     # Factor 1: Early month coverage (0.0 - 0.4 points)
     # Does data start early in the month?
-    if min_day <= 3:  # Data starts in first 3 days
-        early_coverage_score = 0.4
-        logger.debug(f"Phase 3: {month_name} - ✅ Early coverage: starts day {min_day} (0.4 points)")
-    elif min_day <= 7:  # Data starts in first week
-        early_coverage_score = 0.2
-        logger.debug(f"Phase 3: {month_name} - ⚠️ Moderate early coverage: starts day {min_day} (0.2 points)")
-    elif min_day <= 14:  # Data starts in first half
-        early_coverage_score = 0.1
-        logger.debug(f"Phase 3: {month_name} - ⚠️ Late early coverage: starts day {min_day} (0.1 points)")
-    else:  # Data starts in second half - suspicious
-        early_coverage_score = 0.0
-        logger.debug(f"Phase 3: {month_name} - ❌ No early coverage: starts day {min_day} (0.0 points)")
+    # For the first month in the dataset, be more lenient since data collection may have started mid-month
+    if is_first_month_in_dataset:
+        # Lenient scoring for first month - if data starts within first week, give full points
+        if min_day <= 7:  # Data starts in first week
+            early_coverage_score = 0.4
+            logger.debug(f"Phase 3: {month_name} - ✅ Early coverage (first month): starts day {min_day} (0.4 points)")
+        elif min_day <= 14:  # Data starts in first half
+            early_coverage_score = 0.2
+            logger.debug(f"Phase 3: {month_name} - ⚠️ Moderate early coverage (first month): starts day {min_day} (0.2 points)")
+        else:  # Data starts in second half - still suspicious even for first month
+            early_coverage_score = 0.0
+            logger.debug(f"Phase 3: {month_name} - ❌ No early coverage (first month): starts day {min_day} (0.0 points)")
+    else:
+        # Standard scoring for subsequent months
+        if min_day <= 3:  # Data starts in first 3 days
+            early_coverage_score = 0.4
+            logger.debug(f"Phase 3: {month_name} - ✅ Early coverage: starts day {min_day} (0.4 points)")
+        elif min_day <= 7:  # Data starts in first week
+            early_coverage_score = 0.2
+            logger.debug(f"Phase 3: {month_name} - ⚠️ Moderate early coverage: starts day {min_day} (0.2 points)")
+        elif min_day <= 14:  # Data starts in first half
+            early_coverage_score = 0.1
+            logger.debug(f"Phase 3: {month_name} - ⚠️ Late early coverage: starts day {min_day} (0.1 points)")
+        else:  # Data starts in second half - suspicious
+            early_coverage_score = 0.0
+            logger.debug(f"Phase 3: {month_name} - ❌ No early coverage: starts day {min_day} (0.0 points)")
     
     # Factor 2: Distribution spread (0.0 - 0.4 points)
     # Is data spread across the month or concentrated at end?
@@ -606,7 +691,15 @@ def validate_complete_months(candidate_months: List[Tuple[datetime, datetime]],
                 
                 # Integrated Phase 3: Validate distribution pattern using the filtered data we already have
                 logger.debug(f"Phase 2+3: Analyzing distribution pattern for {month_name} using {contained_count:,} fully-contained events")
-                distribution_score = _calculate_distribution_score(fully_contained.select(['start_parsed']), month_start, month_name)
+                
+                # Pass information about whether this is the first month in dataset
+                is_first_month = (i == 0)
+                distribution_score = _calculate_distribution_score(
+                    fully_contained.select(['start_parsed']), 
+                    month_start, 
+                    month_name,
+                    is_first_month_in_dataset=is_first_month
+                )
                 
                 # Threshold for acceptance (0.7 = 70% confidence)
                 if distribution_score >= 0.7:

@@ -389,7 +389,7 @@ class ReportGenerator:
                     {charts['top_attacks_max_pps']}
                 </div>
                 
-                <h3>Security Events by Policy (Top 5)</h3>
+                <h3>Security Events by Policy</h3>
                 <div class="chart-container">
                     {charts['security_events_by_policy']}
                 </div>
