@@ -650,7 +650,8 @@ class ForensicsVisualizer:
                     'Attack Max PPS', 
                     bandwidth_config['chart_title']
                 ),
-                vertical_spacing=0.06
+                vertical_spacing=0.10,
+                row_heights=[0.25, 0.25, 0.25, 0.25]
             )
             
             # Get chart type and style from configuration
@@ -868,7 +869,7 @@ class ForensicsVisualizer:
                     'font': {'size': 18, 'color': '#000000'},
                     'x': 0.5
                 },
-                'height': 1000,  # Increased height for 4 subplots
+                'height': 1700,  # Increased height for 4 subplots
                 'showlegend': False,
                 'legend': {
                     'orientation': 'h',

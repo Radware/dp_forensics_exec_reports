@@ -28,6 +28,12 @@ def setup_logging(verbose: bool = False) -> None:
         verbose: Enable debug level logging
     """
     level = logging.DEBUG if verbose else logging.INFO
+    
+    # Remove existing handlers to prevent duplicate log output
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
     logging.basicConfig(
         level=level,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -273,7 +279,15 @@ def _find_unambiguous_evidence(samples):
     
     for date_str in samples:
         try:
-            date_part = date_str.split()[0]
+            parts_space = date_str.split()
+            date_part = parts_space[0]
+            
+            # Detect time precision from the time component
+            if len(parts_space) > 1:
+                time_components = parts_space[1].split(':')
+                time_fmt = ' %H:%M:%S' if len(time_components) >= 3 else ' %H:%M'
+            else:
+                time_fmt = ''
             
             # Try both dot and slash delimiters
             delimiter = None
@@ -289,14 +303,16 @@ def _find_unambiguous_evidence(samples):
                     # Only count unambiguous cases where one part is definitely > 12
                     if first > 12 and second <= 12:  # Must be DD/MM or DD.MM format
                         if delimiter == '.':
-                            unambiguous_evidence['%d.%m.%Y %H:%M:%S'] = unambiguous_evidence.get('%d.%m.%Y %H:%M:%S', 0) + 1
+                            fmt = f'%d.%m.%Y{time_fmt}'
                         else:  # delimiter == '/'
-                            unambiguous_evidence['%d/%m/%Y %H:%M:%S'] = unambiguous_evidence.get('%d/%m/%Y %H:%M:%S', 0) + 1
+                            fmt = f'%d/%m/%Y{time_fmt}'
+                        unambiguous_evidence[fmt] = unambiguous_evidence.get(fmt, 0) + 1
                     elif second > 12 and first <= 12:  # Must be MM/DD or MM.DD format
                         if delimiter == '.':
-                            unambiguous_evidence['%m.%d.%Y %H:%M:%S'] = unambiguous_evidence.get('%m.%d.%Y %H:%M:%S', 0) + 1
+                            fmt = f'%m.%d.%Y{time_fmt}'
                         else:  # delimiter == '/'
-                            unambiguous_evidence['%m/%d/%Y %H:%M:%S'] = unambiguous_evidence.get('%m/%d/%Y %H:%M:%S', 0) + 1
+                            fmt = f'%m/%d/%Y{time_fmt}'
+                        unambiguous_evidence[fmt] = unambiguous_evidence.get(fmt, 0) + 1
         except (ValueError, IndexError):
             continue
             
@@ -428,15 +444,31 @@ def get_complete_months(start_date: datetime, end_date: datetime,
         
         # Check if this is a complete month within our data range
         # For the first month, we're lenient - if it's already set as current_month (from the logic above),
-        # we include it as long as its end date is within range
-        # For subsequent months, they must start at or after data start AND end within data range
+        # we include it as long as its end date is within range.
+        # For the last month, apply symmetric leniency: if data ends within the last 7 days of the month,
+        # include it as a candidate and let Phase 2 validation decide if it's usable.
+        # For all other months, they must start at or after data start AND end within data range.
         is_first_candidate = (len(complete_months) == 0 and current_month.month == start_date.month and current_month.year == start_date.year)
+        
+        # Last day of the current month
+        last_day_of_current_month = month_end.day
+        # Is the data end within the last 7 days of this month? (symmetric to first-month day <= 7 leniency)
+        is_last_candidate = (
+            current_month.month == end_date.month and
+            current_month.year == end_date.year and
+            end_date.day >= last_day_of_current_month - 6
+        )
         
         if is_first_candidate:
             # First month - lenient check (already validated above that data starts early enough)
             month_fully_in_range = (month_end.date() <= end_date.date())
+        elif is_last_candidate:
+            # Last month - lenient check: data ends within last 7 days, include as candidate
+            month_fully_in_range = (current_month >= start_date)
+            if month_fully_in_range:
+                logger.debug(f"Phase 1: Data ends on day {end_date.day}/{last_day_of_current_month} - including {current_month.strftime('%Y-%m (%B)')} as last month candidate")
         else:
-            # Subsequent months - strict check
+            # Other months - strict check: must be fully within data range
             month_fully_in_range = (current_month >= start_date and month_end.date() <= end_date.date())
         
         if month_fully_in_range:
