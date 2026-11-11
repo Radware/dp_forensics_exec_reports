@@ -1,0 +1,70 @@
+### Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+forensics_env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!README.md
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+
+# Temporary files
+temp/*
+report_files/*
+forensics_input/*
+logs/
+*.log
+
+# Config
+config.py
+
+# Docker
+docker-compose.yml
+docker-compose.override.yml
+Dockerfile.dev
+.dockerignore
+
+# Kubernetes
+k8s/
+
+# Dev container
+.devcontainer/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large files
+*.dump
+*.sql
+*.db
