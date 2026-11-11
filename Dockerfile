@@ -11,8 +11,10 @@ ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # curl is used by HEALTHCHECK
+# libatomic1 is required by Playwright's bundled Node driver (missing from slim/trixie images)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies (+ production WSGI server)
